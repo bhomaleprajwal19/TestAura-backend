@@ -25,7 +25,8 @@ exports.register = async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
-      maxAge: 12 * 60 * 60 * 1000 // 12 hours
+      maxAge: 12 * 60 * 60 * 1000, // 12 hours
+      path: '/', // Add this to match clearCookie
     });
 
     res.status(201).json({ user: newUser });
@@ -56,7 +57,8 @@ exports.login = async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
-      maxAge: 12 * 60 * 60 * 1000
+      maxAge: 12 * 60 * 60 * 1000,
+      path: '/', // Add this to match clearCookie
     });
 
     res.status(200).json({ user });
@@ -86,28 +88,14 @@ exports.getCurrentUser = async (req, res) => {
 };
 
 // ==========================
-// LOGOUT
+// LOGOUT — FIXED
 // ==========================
 exports.logout = (req, res) => {
-  console.log('Clearing token cookie...');
-
-  // Overwrite the cookie with empty value + expired date
-  res.cookie('token', '', {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'None',
-    expires: new Date(0),
-    // domain: '.yourdomain.com', // Uncomment + set if you used domain when setting the cookie
-    // path: '/', // Uncomment if you set a specific path when setting the cookie
-  });
-
-  // Also clearCookie for extra certainty
   res.clearCookie('token', {
     httpOnly: true,
     secure: true,
     sameSite: 'None',
-    // domain: '.yourdomain.com', // Uncomment + match the domain if needed
-    // path: '/', // Uncomment if applicable
+    path: '/', // MUST match path from set-cookie
   });
 
   return res.status(200).json({ message: 'Logged out successfully' });
@@ -136,7 +124,7 @@ exports.updateScore = async (req, res) => {
 
       user.scores.set(subject, {
         totalQuizzes: (current?.totalQuizzes || 0) + 1,
-        totalScore: (current?.totalScore || 0) + newScore
+        totalScore: (current?.totalScore || 0) + newScore,
       });
     } else {
       const prev = existingQuiz.score;
@@ -144,7 +132,7 @@ exports.updateScore = async (req, res) => {
 
       user.scores.set(subject, {
         totalQuizzes: current?.totalQuizzes || 1,
-        totalScore: (current?.totalScore || 0) + (newScore - prev)
+        totalScore: (current?.totalScore || 0) + (newScore - prev),
       });
     }
 
