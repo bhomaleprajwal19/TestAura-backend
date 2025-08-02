@@ -19,10 +19,7 @@ router.post('/login',[
     body('password').exists().withMessage('Password is required'),
 ], userController.login); // Assuming login method is defined in userController
 
-router.get('/logout', (req, res) => {
-    res.clearCookie('token');
-    res.status(200).json({ message: 'Logged out successfully' });
-});
+router.get('/logout', userController.logout);
 
 router.get('/profile', auth, async (req, res) => {
   try {

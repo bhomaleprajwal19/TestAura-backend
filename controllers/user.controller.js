@@ -93,15 +93,20 @@ exports.getCurrentUser = async (req, res) => {
 // ==========================
 exports.logout = async (req, res) => {
   const token = req.cookies.token;
+  console.log("Cookie token:", token);  // 🟡 Log token from cookies
+
   if (!token) return res.status(401).json({ message: 'Not authenticated' });
 
   try {
-    await BlacklistedToken.create({ token });
+    const saved = await BlacklistedToken.create({ token });
+    console.log("Saved blacklisted token:", saved);  // ✅ Log saved doc
+
     res.clearCookie('token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
     });
+
     res.status(200).json({ message: 'Logged out successfully' });
   } catch (error) {
     console.error("Logout error:", error);
