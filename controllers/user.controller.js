@@ -89,12 +89,28 @@ exports.getCurrentUser = async (req, res) => {
 // LOGOUT
 // ==========================
 exports.logout = (req, res) => {
+  console.log('Clearing token cookie...');
+
+  // Overwrite the cookie with empty value + expired date
+  res.cookie('token', '', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'None',
+    expires: new Date(0),
+    // domain: '.yourdomain.com', // Uncomment + set if you used domain when setting the cookie
+    // path: '/', // Uncomment if you set a specific path when setting the cookie
+  });
+
+  // Also clearCookie for extra certainty
   res.clearCookie('token', {
     httpOnly: true,
     secure: true,
-    sameSite: 'None'
+    sameSite: 'None',
+    // domain: '.yourdomain.com', // Uncomment + match the domain if needed
+    // path: '/', // Uncomment if applicable
   });
-  res.status(200).json({ message: 'Logged out successfully' });
+
+  return res.status(200).json({ message: 'Logged out successfully' });
 };
 
 // ==========================
