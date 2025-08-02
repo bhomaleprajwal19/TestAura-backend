@@ -1,237 +1,206 @@
 const { validationResult } = require('express-validator');
-const UserModel = require('../models/user.models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const UserModel = require('../models/user.models');
 const Leaderboard = require('../models/leaderboard.model');
 const Engagement = require('../models/engagement.model');
 
 // ==========================
-// REGISTER CONTROLLER
+// REGISTER
 // ==========================
-module.exports.register = async (req, res) => {
+exports.register = async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { name, email, password, mobile, username } = req.body;
 
   try {
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create new user
-    const newUser = new UserModel({
-      name,
-      email,
-      password: hashedPassword,
-      mobile,
-      username
-    });
-
+    const newUser = new UserModel({ name, email, password: hashedPassword, mobile, username });
     await newUser.save();
 
-    // Generate JWT token
-    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
-      expiresIn: '12h'
+    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '12h' });
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      maxAge: 12 * 60 * 60 * 1000 // 12 hours
     });
 
-    // Set cookie
-    res.status(201).json({ token, user: newUser });
-
+    res.status(201).json({ user: newUser });
   } catch (error) {
-    console.error(error);
+    console.error('Registration error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // ==========================
-// LOGIN CONTROLLER
+// LOGIN
 // ==========================
-module.exports.login = async (req, res) => {
+exports.login = async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { email, password } = req.body;
 
   try {
     const user = await UserModel.findOne({ email }).select('+password');
-    if (!user) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '12h' });
 
-    // Generate JWT token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '12h'
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      maxAge: 12 * 60 * 60 * 1000
     });
 
-    res.cookie('token', token);
-    res.status(200).json({ token, user });
-
+    res.status(200).json({ user });
   } catch (error) {
-    console.error(error);
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
+// ==========================
+// GET CURRENT USER (AUTH CHECK)
+// ==========================
+exports.getCurrentUser = async (req, res) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ message: 'Not authenticated' });
 
-module.exports.updateScore = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await UserModel.findById(decoded.id).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.status(200).json({ user });
+  } catch (err) {
+    console.error('Auth error:', err);
+    res.status(401).json({ message: 'Invalid token' });
   }
+};
+
+// ==========================
+// LOGOUT
+// ==========================
+exports.logout = (req, res) => {
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'None'
+  });
+  res.status(200).json({ message: 'Logged out successfully' });
+};
+
+// ==========================
+// UPDATE SCORE
+// ==========================
+exports.updateScore = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { userId, score, subject, quizId } = req.body;
 
   try {
-    const newScore = parseInt(score);
     const user = await UserModel.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const existingQuiz = user.quizHistory.find(
-      (entry) => entry.quizId.toString() === quizId
-    );
-
+    const newScore = parseInt(score);
+    const existingQuiz = user.quizHistory.find((entry) => entry.quizId.toString() === quizId);
     const current = user.scores.get(subject);
 
     if (!existingQuiz) {
-      // 🟢 First attempt — add to quiz history
       user.quizHistory.push({ quizId, subject, score: newScore });
-      Engagement.create({
-        userId: user._id, 
-        quizId,
-        subject,
-        score: newScore
+      await Engagement.create({ userId: user._id, quizId, subject, score: newScore });
+
+      user.scores.set(subject, {
+        totalQuizzes: (current?.totalQuizzes || 0) + 1,
+        totalScore: (current?.totalScore || 0) + newScore
       });
-
-
-
-      // 🟢 Update subject score summary
-      if (!current) {
-        user.scores.set(subject, { totalQuizzes: 1, totalScore: newScore });
-      } else {
-        user.scores.set(subject, {
-          totalQuizzes: current.totalQuizzes + 1,
-          totalScore: current.totalScore + newScore
-        });
-      }
     } else {
-      // 🟡 Re-attempt — update only the score difference
-      const previousScore = existingQuiz.score;
+      const prev = existingQuiz.score;
       existingQuiz.score = newScore;
 
-      if (!current) {
-        // Subject missing, create it from current attempt
-        user.scores.set(subject, { totalQuizzes: 1, totalScore: newScore });
-      } else {
-        const updatedScore = current.totalScore + (newScore - previousScore);
-        user.scores.set(subject, {
-          totalQuizzes: current.totalQuizzes, // no new quiz added
-          totalScore: updatedScore
-        });
-      }
+      user.scores.set(subject, {
+        totalQuizzes: current?.totalQuizzes || 1,
+        totalScore: (current?.totalScore || 0) + (newScore - prev)
+      });
     }
 
     await user.save();
-
-    return res.status(200).json({ message: 'Score updated successfully', user });
+    res.status(200).json({ message: 'Score updated successfully', user });
   } catch (error) {
-    console.error('Error updating score:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
+    console.error('Score update error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
-
-
-module.exports.getAura = async (req, res) => {
+// ==========================
+// GET AURA
+// ==========================
+exports.getAura = async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { userId } = req.body;
-
-  if (!userId) {
-    return res.status(400).json({ message: 'User ID is required' });
-  }
+  if (!userId) return res.status(400).json({ message: 'User ID is required' });
 
   try {
     const user = await UserModel.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const scoresMap = user.scores;
     let sumOfAverages = 0;
-
-    for (const [subject, score] of scoresMap.entries()) {
-      const { totalQuizzes, totalScore } = score;
-      const avg = totalQuizzes > 0 ? totalScore / totalQuizzes : 0;
+    for (const [subject, score] of user.scores.entries()) {
+      const avg = score.totalQuizzes > 0 ? score.totalScore / score.totalQuizzes : 0;
       sumOfAverages += avg;
     }
 
-   const aura = Math.ceil(100 + sumOfAverages * 10);
-
-
-    // Update user's aura
+    const aura = Math.ceil(100 + sumOfAverages * 10);
     user.aura = aura;
     await user.save();
 
-    // Ensure required values for leaderboard update
-    const username = user.username; // assuming user has a username field
-    const name = user.name;
-
-    // Update leaderboard
     await Leaderboard.findOneAndUpdate(
-      { username },
-      { $set: { name, aura } },
+      { username: user.username },
+      { $set: { name: user.name, aura } },
       { upsert: true, new: true }
     );
 
     res.status(200).json({ message: 'Aura calculated and leaderboard updated', aura });
-
   } catch (err) {
-    console.error('Error in getAura:', err);
+    console.error('Aura error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
-
-exports.getAllUsers = async (req, res) => {
+// ==========================
+// GET ALL USERS
+// ==========================
+exports.getAllUsers = async (_req, res) => {
   try {
-    const users = await UserModel.find().select('-password'); // Exclude password field
+    const users = await UserModel.find().select('-password');
     res.status(200).json(users);
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('Get users error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
-
+// ==========================
+// DELETE USER
+// ==========================
 exports.deleteUser = async (req, res) => {
-  const userId = req.params.id;
-
   try {
-    const user = await UserModel.findByIdAndDelete(userId);
-    
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    const user = await UserModel.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
     res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error('Delete user error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
