@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const UserModel = require('../models/user.models');
 const Leaderboard = require('../models/leaderboard.model');
+const BlacklistedToken = require('../models/blacklistedtoken.model');
 const Engagement = require('../models/engagement.model');
 
 // ==========================
@@ -90,15 +91,24 @@ exports.getCurrentUser = async (req, res) => {
 // ==========================
 // LOGOUT — FIXED
 // ==========================
-exports.logout = (req, res) => {
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-  });
-  res.status(200).json({ message: 'Logged out successfully' });
+exports.logout = async (req, res) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ message: 'Not authenticated' });
 
+  try {
+    await BlacklistedToken.create({ token });
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+    });
+    res.status(200).json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error("Logout error:", error);
+    res.status(500).json({ message: 'Logout failed' });
+  }
 };
+
 
 // ==========================
 // UPDATE SCORE
