@@ -23,11 +23,11 @@ exports.register = async (req, res) => {
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'None',
-      maxAge: 12 * 60 * 60 * 1000, // 12 hours
-      path: '/', // Add this to match clearCookie
+      secure: process.env.NODE_ENV === 'production', // true in prod, false in dev
+      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
     });
+
 
     res.status(201).json({ user: newUser });
   } catch (error) {
@@ -55,11 +55,11 @@ exports.login = async (req, res) => {
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'None',
-      maxAge: 12 * 60 * 60 * 1000,
-      path: '/', // Add this to match clearCookie
+      secure: process.env.NODE_ENV === 'production', // true in prod, false in dev
+      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
     });
+
 
     res.status(200).json({ user });
   } catch (error) {
@@ -93,12 +93,11 @@ exports.getCurrentUser = async (req, res) => {
 exports.logout = (req, res) => {
   res.clearCookie('token', {
     httpOnly: true,
-    secure: true,
-    sameSite: 'None',
-    path: '/', // MUST match path from set-cookie
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
   });
+  res.status(200).json({ message: 'Logged out successfully' });
 
-  return res.status(200).json({ message: 'Logged out successfully' });
 };
 
 // ==========================
