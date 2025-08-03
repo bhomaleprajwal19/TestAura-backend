@@ -11,39 +11,34 @@ const Engagement = require('../models/engagement.model');
 // ==========================
 exports.register = async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty())
-    return res.status(400).json({ errors: errors.array() });
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array({ onlyFirstError: true }) });
+  }
 
   const { name, email, password, mobile, username } = req.body;
 
   try {
-    // Check if email already exists
     const existingEmail = await UserModel.findOne({ email });
     if (existingEmail) {
-      return res.status(400).json({ message: 'Email already registered' });
+      return res.status(400).json({ errors: [{ param: 'email', msg: 'Email already registered' }] });
     }
 
-    // Check if username already exists
     const existingUsername = await UserModel.findOne({ username });
     if (existingUsername) {
-      return res.status(400).json({ message: 'Username already taken' });
+      return res.status(400).json({ errors: [{ param: 'username', msg: 'Username already taken' }] });
     }
-    
+
     const existingMobile = await UserModel.findOne({ mobile });
     if (existingMobile) {
-      return res.status(400).json({ message: 'Mobile number already registered' });
+      return res.status(400).json({ errors: [{ param: 'mobile', msg: 'Mobile number already registered' }] });
     }
 
-
-    // Hash password and save user
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new UserModel({ name, email, password: hashedPassword, mobile, username });
     await newUser.save();
 
-    // Generate JWT
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '12h' });
 
-    // Set JWT in cookie
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -51,14 +46,13 @@ exports.register = async (req, res) => {
       maxAge: 24 * 60 * 60 * 1000,
     });
 
-   
-
     res.status(201).json({ user: newUser, message: 'User registered successfully' });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ errors: [{ param: 'server', msg: 'Server error' }] });
   }
 };
+
 
 // ==========================
 // LOGIN
