@@ -6,6 +6,7 @@ const UserModel = require('../models/user.models');
 const userController = require('../controllers/user.controller');
 
 
+
 router.post('/register',[
     body('name').isLength({min:3}).withMessage('Name must be at least 3 characters long'),
     body('email').isEmail().withMessage('Must be a valid email'),
