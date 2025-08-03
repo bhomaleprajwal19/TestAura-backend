@@ -9,13 +9,13 @@ connectToDb();
 const quizRoutes = require('./routes/quize.routes');
 const adminRoutes = require('./routes/admin.routes');
 const leaderboardRoutes=require('./routes/leaderboard.routes');
+const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [];
 
 const cors = require('cors');
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174','https://testaura-client.vercel.app'],  // Vite/React frontend URL
-    credentials: true                 // allow cookies to be sent/received
+  origin: allowedOrigins,
+  credentials: true
 }));
-
 app.use(express.json());
 
 const cookieParser = require('cookie-parser');
