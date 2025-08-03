@@ -8,14 +8,12 @@ const userController = require('../controllers/user.controller');
 
 
 router.post('/register', [
-  body('name').isLength({ min: 3 }).withMessage('Name must be at least 3 characters long'),
+  body('name').isLength({ min: 2 }).withMessage('Name must be at least 2 characters long'),
   body('email').isEmail().withMessage('Please enter a valid email address'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
   body('mobile').isLength({ min: 10 }).withMessage('Mobile number must be  10 Digits long'),
   body('mobile').isLength({ max: 10 }).withMessage('Mobile number must be  10 Digits long'),
-
-  body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters long'),
-
+  body('username').isLength({ min: 2 }).withMessage('Username must be at least 2 characters long'),
 ], userController.register);
 
 router.post('/login', [
