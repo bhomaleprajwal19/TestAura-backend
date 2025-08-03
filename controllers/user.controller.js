@@ -28,6 +28,12 @@ exports.register = async (req, res) => {
     if (existingUsername) {
       return res.status(400).json({ message: 'Username already taken' });
     }
+    
+    const existingMobile = await UserModel.findOne({ mobile });
+    if (existingMobile) {
+      return res.status(400).json({ message: 'Mobile number already registered' });
+    }
+
 
     // Hash password and save user
     const hashedPassword = await bcrypt.hash(password, 10);
